@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">GPSTracker</string>
+    <string name="trackertextstop">Stop Service</string>
+    <string name= "trackertextstart">Start Service</string>
+    <string name= "submitinfo">Submit</string>
+    <string name= "geofenceenterformat"><![CDATA[Enter latitude, longitude, then accuracy in meters all separated by spaces. If you would like to list multiple geofences then separate the fences by a comma separated by spaces. Columbus Academy is automatically included as a geofenced area. Example geofence entry —> 41.1231 -13.1241 100 , 41.213 -14 50]]></string>
+</resources>
