@@ -1,14 +1,16 @@
 package com.austinmzhang.gpstracker;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.location.Location;
 import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
+import android.preference.PreferenceManager;
 import android.provider.Settings;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
@@ -16,27 +18,21 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-
-import com.android.volley.Request;
-import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.toolbox.StringRequest;
-import com.android.volley.toolbox.Volley;
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.tasks.OnSuccessListener;
-
-import java.util.HashMap;
-import java.util.Map;
-
+import android.widget.EditText;
+import android.widget.TextView;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Scanner;
 
 public class MainActivity extends AppCompatActivity {
 
-    private FusedLocationProviderClient mFusedLocationClient;
-    Location mCurrentLocation;
     Button trackerToggle;
+    Button submitInfo;
 
+    String name;
+    String geofenceInput;
+
+    @SuppressLint("BatteryLife")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Log.wtf("Activity", "onCreate");
@@ -45,13 +41,17 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         trackerToggle = findViewById(R.id.trackertoggle);
-        if (isMyServiceRunning(TrackerService.class)) {
+        if (isMyServiceRunning(LocationReceiver.class)) {
+            Log.wtf("RUNNING", "SERVICE");
             trackerToggle.setText(R.string.trackertextstop);
+            trackerToggle.setEnabled(true);
         }
         else {
+            Log.wtf("NOT RUNNING", "SERVICE");
             trackerToggle.setText(R.string.trackertextstart);
             trackerToggle.setEnabled(false);
         }
+
 
         trackerToggle.setOnClickListener(new Button.OnClickListener() {
             @Override
@@ -65,8 +65,36 @@ public class MainActivity extends AppCompatActivity {
                     Log.wtf("NOT RUNNING", "Service was not running, launching now");
                     Intent serviceIntent = new Intent(MainActivity.this, TrackerService.class);
 
-                    startService(serviceIntent);
                     trackerToggle.setText(R.string.trackertextstop);
+
+
+                    startService(serviceIntent);
+                }
+            }
+        });
+
+        submitInfo = findViewById(R.id.submitinfo);
+        submitInfo.setOnClickListener(new Button.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                name =  ((EditText)findViewById(R.id.nameinput)).getText().toString();
+                geofenceInput = ((EditText)findViewById(R.id.geofenceinput)).getText().toString();
+
+                List<String> geofenceListString = parseGeofenceInput(geofenceInput);
+
+                if (geofenceListString != null) {
+                    String displayText = "Name: " + name + "\n" + "Geofences: " + geofenceListString.toString();
+                    ((TextView)findViewById(R.id.infoconfirm)).setText(displayText);
+                    trackerToggle.setEnabled(true);
+
+                    SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+                    SharedPreferences.Editor editor = sharedPref.edit();
+                    editor.putString(getString(R.string.geofence_string_key), geofenceInput);
+                    editor.putString(getString(R.string.name_key), name);
+                    editor.commit();
+                }
+                else {
+                    ((TextView)findViewById(R.id.infoconfirm)).setText(R.string.formatincorrect);
                 }
             }
         });
@@ -84,6 +112,10 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+        }
+
 
         //mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         //getLastLocation();
@@ -99,7 +131,37 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    private void pushLocation(final Location location) {
+    private static List<String> parseGeofenceInput(String geofenceInput) {
+        Scanner scanner = new Scanner(geofenceInput);
+
+        List<String> geofenceListString = new ArrayList<String>();
+
+        try {
+            while (scanner.hasNext()) {
+                String geofenceName = scanner.next();
+                double latitude = Double.parseDouble(scanner.next());
+                double longitude = Double.parseDouble(scanner.next());
+                float radius = Float.parseFloat(scanner.next());
+
+                geofenceListString.add(geofenceName + ": " + " lng:" + longitude + " lat:" + latitude + " rad:" + radius);
+
+                if (scanner.hasNext()) {
+                    if (!scanner.next().equals(",")) {
+                        //User didn't give the correct format if the next character isn't a ,
+                        return null;
+                    }
+                }
+            }
+
+            return geofenceListString;
+        }
+        catch (Exception e) {
+            //User's entry format must have been incorrect
+            return null;
+        }
+    }
+
+    /*private void pushLocation(final Location location) {
         // Instantiate the RequestQueue.
         RequestQueue queue = Volley.newRequestQueue(this);
         String url = "http://24.208.163.239:37896/trackers";
@@ -156,6 +218,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
     }
+    */
 
     private boolean isMyServiceRunning(Class<?> serviceClass) {
         ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);

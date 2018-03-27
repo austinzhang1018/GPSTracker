@@ -31,6 +31,9 @@
 
         <receiver android:name=".LocationReceiver" />
 
+        <receiver android:name=".GeofenceReceiver" />
+
+
     </application>
 
 </manifest>
