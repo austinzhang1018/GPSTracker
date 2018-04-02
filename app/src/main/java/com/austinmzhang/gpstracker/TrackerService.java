@@ -91,7 +91,7 @@ public class TrackerService extends Service {
         // Create the LocationRequest object
         mLocationRequest = LocationRequest.create();
         // Use high accuracy
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);//LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
         // Set the update interval to 60 seconds
         mLocationRequest.setInterval(Constants.UPDATE_INTERVAL);
         // Set the fastest update interval to 5 second

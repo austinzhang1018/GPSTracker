@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
+import android.location.LocationManager;
 import android.os.BatteryManager;
 import android.preference.PreferenceManager;
 import android.support.v4.app.ActivityCompat;
@@ -23,6 +24,7 @@ import com.google.android.gms.location.FusedLocationProviderClient;
 import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingClient;
 import com.google.android.gms.location.GeofencingEvent;
+import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
@@ -39,6 +41,7 @@ import static android.content.Context.BATTERY_SERVICE;
 public class LocationReceiver extends BroadcastReceiver {
     private LocationResult mLocationResult;
     private static String name;
+    private LocationCallback mLocationCallback;
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -52,10 +55,15 @@ public class LocationReceiver extends BroadcastReceiver {
         name = sharedPref.getString(context.getString(R.string.name_key), "namenotsaved");
 
         if (LocationResult.hasResult(intent)) {
+
             this.mLocationResult = LocationResult.extractResult(intent);
 
             if (mLocationResult == null) {
                 return;
+            }
+
+            if (mLocationResult.getLastLocation().getAccuracy() > 100) {
+                LocationServices.getFusedLocationProviderClient(context);//.requestLocationUpdate
             }
 
             int batLevel = -1;
@@ -70,6 +78,8 @@ public class LocationReceiver extends BroadcastReceiver {
 
 
     }
+
+
 
 
     private void pushLocation(final Location location, Context context, final int batLevel) {

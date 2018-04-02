@@ -105,7 +105,7 @@ public class GeofenceReceiver extends BroadcastReceiver {
             mLocationRequest.setFastestInterval(Constants.FASTEST_INTERVAL_TRACKING);
         }
         else {
-            mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+            mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);//PRIORITY_BALANCED_POWER_ACCURACY);
             // Set the update interval to 60 seconds
             mLocationRequest.setInterval(Constants.UPDATE_INTERVAL);
             // Set the fastest update interval to 5 second
