@@ -41,7 +41,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         trackerToggle = findViewById(R.id.trackertoggle);
-        if (isMyServiceRunning(LocationReceiver.class)) {
+        if (isMyServiceRunning(TrackerService.class)) {
             Log.wtf("RUNNING", "SERVICE");
             trackerToggle.setText(R.string.trackertextstop);
             trackerToggle.setEnabled(true);

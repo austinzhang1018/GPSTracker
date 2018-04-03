@@ -2,7 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/GPSTracker.iml" filepath="$PROJECT_DIR$/GPSTracker.iml" />
+      <module fileurl="file://C:\Users\Austin\Documents\Code\GPSTrackerCallbackApp\GPSTracker.iml" filepath="C:\Users\Austin\Documents\Code\GPSTrackerCallbackApp\GPSTracker.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/GPSTrackerCallbackApp.iml" filepath="$PROJECT_DIR$/.idea/GPSTrackerCallbackApp.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
     </modules>
   </component>

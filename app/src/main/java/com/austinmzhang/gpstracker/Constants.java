@@ -19,6 +19,9 @@ public final class Constants {
     private static final int FASTEST_INTERVAL_IN_SECONDS_TRACKING = 30;
     private static final int UPDATE_INTERVAL_IN_SECONDS_TRACKING = 45;
 
+    private static final int UPDATE_INTERVAL_IN_SECONDS_CALIBRATING = 5;
+    public static final int UPDATE_INTERVAL_CALIBRATING = MILLISECONDS_PER_SECOND * UPDATE_INTERVAL_IN_SECONDS_CALIBRATING;
+
 
     public static final long FASTEST_INTERVAL = MILLISECONDS_PER_SECOND * FASTEST_INTERVAL_IN_SECONDS;
 

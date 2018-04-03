@@ -8,9 +8,11 @@ import android.app.Service;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Location;
+import android.os.BatteryManager;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -33,6 +35,7 @@ import com.google.android.gms.location.Geofence;
 import com.google.android.gms.location.GeofencingClient;
 import com.google.android.gms.location.GeofencingEvent;
 import com.google.android.gms.location.GeofencingRequest;
+import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
@@ -69,8 +72,20 @@ public class TrackerService extends Service {
     //Flag that indicates whether google play services is available
     private Boolean servicesAvailable = false;
 
-    PendingIntent locationIntent;
     PendingIntent geofenceIntent;
+
+    private LocationCallback mLocationCallback;
+
+    private LocationCallback mExtraLocationCallback;
+
+    LocationRequest mExtraLocationRequests;
+
+    private String name;
+
+    private int locationRequestCounter;
+
+    private BroadcastReceiver geofenceReceiver;
+
 
     //binds service to stuff (need to figure out what exactly this does)
     public class LocalBinder extends Binder {
@@ -80,12 +95,18 @@ public class TrackerService extends Service {
     }
 
 
-    //Creates LocaitonRequest, sets priority of location request, sets the update interval and fastest update interval
+    //Creates LocationRequest, sets priority of location request, sets the update interval and fastest update interval
     @Override
     public void onCreate() {
+
+        locationRequestCounter = 0;
+
         Log.wtf("Called", "onCreate");
 
         super.onCreate();
+
+        SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+        name = sharedPref.getString(getApplicationContext().getString(R.string.name_key), "namenotsaved");
 
         mInProgress = false;
         // Create the LocationRequest object
@@ -97,9 +118,15 @@ public class TrackerService extends Service {
         // Set the fastest update interval to 5 second
         mLocationRequest.setFastestInterval(Constants.FASTEST_INTERVAL);
 
+        mExtraLocationRequests = LocationRequest.create();
+        mExtraLocationRequests.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        mExtraLocationRequests.setInterval(Constants.UPDATE_INTERVAL_CALIBRATING);
+        mExtraLocationRequests.setFastestInterval(Constants.UPDATE_INTERVAL_CALIBRATING);
+
         servicesAvailable = servicesConnected();
 
         setUpLocationClientIfNeeded();
+
     }
 
     //Checks to see if google play services are connected
@@ -170,6 +197,162 @@ public class TrackerService extends Service {
     }
 
     private void setUpLocationClientIfNeeded() {
+        if (geofenceReceiver == null) {
+            geofenceReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    Log.wtf("Called onReceive", "GEO");
+
+                    SharedPreferences sharedPref = PreferenceManager.getDefaultSharedPreferences(context);
+                    name = sharedPref.getString(context.getString(R.string.name_key), "namenotsaved");
+
+                    GeofencingEvent geofencingEvent = GeofencingEvent.fromIntent(intent);
+
+                    if (!GeofencingEvent.fromIntent(intent).hasError() && geofencingEvent.getGeofenceTransition() == Geofence.GEOFENCE_TRANSITION_EXIT) {
+                        pushGeofence(context, geofencingEvent);
+                        Log.wtf("GEO", "exit");
+                        alterLocationSettings(context, true);
+                    }
+
+                    if (!GeofencingEvent.fromIntent(intent).hasError() && geofencingEvent.getGeofenceTransition() == Geofence.GEOFENCE_TRANSITION_ENTER) {
+                        //pushGeofence(context, geofencingEvent);
+                        Log.wtf("GEO", "enter");
+                        alterLocationSettings(context, false);
+                    }
+                }
+
+
+                private void pushGeofence(Context context, final GeofencingEvent geofencingEvent) {
+                    // Instantiate the RequestQueue.
+                    RequestQueue queue = Volley.newRequestQueue(context);
+                    String url = "http://24.208.163.239:37896/trackers";
+                    // Request a string response from the provided URL.
+                    StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
+                            new Response.Listener<String>() {
+                                @Override
+                                public void onResponse(String response) {
+                                    // Display the first 500 characters of the response string.
+                                }
+                            }, new Response.ErrorListener() {
+                        @Override
+                        public void onErrorResponse(VolleyError error) {
+                        }
+                    }) {
+                        @Override
+                        protected Map<String, String> getParams() {
+                            Map<String, String> params = new HashMap<String, String>();
+                            params.put("name", name);
+                            params.put("triggeredgeofence", geofencingEvent.getTriggeringGeofences().get(0).getRequestId());
+                            return params;
+                        }
+                    };
+                    // Add the request to the RequestQueue.
+                    queue.add(stringRequest);
+
+                    Log.wtf("Geo", "Pushed");
+                }
+
+                private void alterLocationSettings(Context context, boolean precise) {
+                    FusedLocationProviderClient mFusedLocationClient = LocationServices.getFusedLocationProviderClient(context);
+                    if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        Log.d("NEEDS PERMISSION", "LOCATION");
+                        return;
+                    }
+
+                    LocationRequest mLocationRequest;
+
+                    mLocationRequest = LocationRequest.create();
+                    // Use high accuracy
+                    if (precise) {
+                        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);  // Set the update interval to 60 seconds
+                        mLocationRequest.setInterval(Constants.UPDATE_INTERVAL_TRACKING);
+                        // Set the fastest update interval to 5 second
+                        mLocationRequest.setFastestInterval(Constants.FASTEST_INTERVAL_TRACKING);
+                    } else {
+                        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);//PRIORITY_BALANCED_POWER_ACCURACY);
+                        // Set the update interval to 60 seconds
+                        mLocationRequest.setInterval(Constants.UPDATE_INTERVAL);
+                        // Set the fastest update interval to 5 second
+                        mLocationRequest.setFastestInterval(Constants.FASTEST_INTERVAL);
+                    }
+
+                    mFusedLocationClient.removeLocationUpdates(mLocationCallback);
+                    mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, null);  //** This line changes
+                }
+            };
+
+            IntentFilter filter = new IntentFilter("GEOFENCE_ALERT");
+            registerReceiver(geofenceReceiver, filter);
+            Log.wtf("RECEIVER: ", "REGISTERED");
+        }
+
+        mLocationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+
+                Log.wtf("CALLEDLOCATIONCALLBACK", "LOCATIONCALLBACK");
+                if (locationResult == null) {
+                    return;
+                }
+
+                if (locationResult.getLastLocation().getAccuracy() < 100) {
+                    int batLevel = -1;
+
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                        BatteryManager bm = (BatteryManager) getApplicationContext().getSystemService(BATTERY_SERVICE);
+                        batLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+                    }
+
+                    pushLocation(locationResult.getLastLocation(), getApplicationContext(), batLevel);
+                } else {
+                    if (ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        return;
+                    }
+                    Log.wtf("WASN'T ACCURATE ENOUGH", "CALLING EXTRALOCATIONCALLBACK");
+                    mFusedLocationClient.requestLocationUpdates(mExtraLocationRequests, mExtraLocationCallback, null);
+                }
+            }
+        };
+
+        mExtraLocationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                Log.wtf("EXTRALOCATIONCALLBACK", "CALLED");
+                Log.wtf("EXTRALOCATIONCALLBACK", Integer.toString(locationRequestCounter));
+
+
+                if (locationResult == null) {
+                    return;
+                }
+
+                if (locationResult.getLastLocation().getAccuracy() < 100) {
+                    int batLevel = -1;
+
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                        BatteryManager bm = (BatteryManager) getApplicationContext().getSystemService(BATTERY_SERVICE);
+                        batLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY);
+                    }
+
+                    pushLocation(locationResult.getLastLocation(), getApplicationContext(), batLevel);
+
+                    mFusedLocationClient.removeLocationUpdates(mExtraLocationCallback);
+                    locationRequestCounter = 0;
+                    Log.wtf("EXTRALOCATIONCALLBACK", "ACCURATE ENOUGH PUSHING");
+                } else {
+                    locationRequestCounter++;
+                    Log.wtf("EXTRALOCATIONCALLBACK", "NOT ACCURATE ENOUGH");
+
+                }
+
+                if (locationRequestCounter > 5) {
+                    mFusedLocationClient.removeLocationUpdates(mExtraLocationCallback);
+                    locationRequestCounter = 0;
+                    Log.wtf("EXTRALOCATIONCALLBACK", "MAX_TRIES_REACHED_ABORT");
+                }
+            }
+        };
+
+
         Log.wtf("Called", "setUpLocationClientIfNeeded");
 
 
@@ -181,9 +364,7 @@ public class TrackerService extends Service {
             }
 
 
-            Intent intent = new Intent(this, LocationReceiver.class);
-            locationIntent = PendingIntent.getBroadcast(this, 54321, intent, PendingIntent.FLAG_CANCEL_CURRENT);
-            mFusedLocationClient.requestLocationUpdates(mLocationRequest, locationIntent);  //** This line changes
+            mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, null);  //** This line changes
         }
 
         if (mGeofencingClient == null) {
@@ -203,7 +384,8 @@ public class TrackerService extends Service {
             builder.addGeofences(mGeofenceList);
             GeofencingRequest geoRequest = builder.build();
 
-            Intent intent = new Intent(this, GeofenceReceiver.class);
+            Intent intent = new Intent();
+            intent.setAction("GEOFENCE_ALERT");
             geofenceIntent = PendingIntent.getBroadcast(this, 12345, intent, PendingIntent.FLAG_CANCEL_CURRENT);
             mGeofencingClient.addGeofences(geoRequest, geofenceIntent);
         }
@@ -221,39 +403,18 @@ public class TrackerService extends Service {
         return mDateFormat.format(new Date());
     }
 
-    //Used for logging
-    public void appendLog(String text, String filename) {
-        File logFile = new File(filename);
-        if (!logFile.exists()) {
-            try {
-                logFile.createNewFile();
-            } catch (IOException e) {
-                // TODO Auto-generated catch block
-                e.printStackTrace();
-            }
-        }
-        try {
-            //BufferedWriter for performance, true to set append to file flag
-            BufferedWriter buf = new BufferedWriter(new FileWriter(logFile, true));
-            buf.append(text);
-            buf.newLine();
-            buf.close();
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-    }
-
     //
     @Override
     public void onDestroy() {
         // Turn off the request flag
         this.mInProgress = false;
 
+        unregisterReceiver(geofenceReceiver);
+
 
         if (this.servicesAvailable && this.mFusedLocationClient != null) {
             this.mFusedLocationClient.flushLocations();
-            this.mFusedLocationClient.removeLocationUpdates(locationIntent);
+            this.mFusedLocationClient.removeLocationUpdates(mLocationCallback);
             // Destroy the current location client
             this.mFusedLocationClient = null;
         }
@@ -261,6 +422,7 @@ public class TrackerService extends Service {
         if (this.servicesAvailable && this.mGeofencingClient != null) {
             this.mGeofencingClient.removeGeofences(geofenceIntent);
             this.mGeofencingClient = null;
+            geofenceReceiver = null;
         }
         // Display the connection status
         // Toast.makeText(this, DateFormat.getDateTimeInstance().format(new Date()) + ":
@@ -319,5 +481,41 @@ public class TrackerService extends Service {
 
         return geofenceList;
     }
+
+
+    private void pushLocation(final Location location, Context context, final int batLevel) {
+        // Instantiate the RequestQueue.
+        RequestQueue queue = Volley.newRequestQueue(context);
+
+        String url = "http://24.208.163.239:37896/trackers";
+        // Request a string response from the provided URL.
+        StringRequest stringRequest = new StringRequest(Request.Method.POST, url,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        // Display the first 500 characters of the response string.
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+            }
+        }) {
+            @Override
+            protected Map<String, String> getParams() {
+                Map<String, String> params = new HashMap<String, String>();
+                params.put("name", name);
+                params.put("longitude", ((Double) location.getLongitude()).toString());
+                params.put("latitude", ((Double) location.getLatitude()).toString());
+                params.put("accuracy", ((Float) location.getAccuracy()).toString());
+                params.put("battery", ((Integer) batLevel).toString());
+                return params;
+            }
+        };
+        // Add the request to the RequestQueue.
+        queue.add(stringRequest);
+
+        Log.wtf("Loc", "Pushed");
+    }
+
 
 }
